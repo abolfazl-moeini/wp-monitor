@@ -19,9 +19,9 @@ async function captureFailureScreenshot(page, reporter, config, scenarioId) {
     const screenshotPath = path.join(config.artifactsDir, `failure-${timestamp}-${cleanName}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
     reporter.setScreenshot(screenshotPath);
-    console.log(`📸 اسکرین‌شات از وضعیت خطا ثبت شد: ${screenshotPath}`);
+    console.log(`📸 Failure screenshot captured: ${screenshotPath}`);
   } catch (screenErr) {
-    console.error(`⚠️ خطا در گرفتن اسکرین‌شات: ${screenErr.message}`);
+    console.error(`⚠️ Failed to capture screenshot: ${screenErr.message}`);
   }
 }
 
@@ -31,7 +31,7 @@ async function captureFailureScreenshot(page, reporter, config, scenarioId) {
  * @returns {Promise<{ isSuccess: boolean, reporter: Reporter }>}
  */
 export async function runMonitoringEngine(customOptions = {}) {
-  console.log('🚀 شروع فرآیند موتور مانیتورینگ E2E ووکامرس (Core Engine)...');
+  console.log('🚀 Starting WooCommerce E2E Monitor Core Engine...');
 
   // 1. Merge site config and validate
   await loadSiteConfig();
@@ -48,7 +48,7 @@ export async function runMonitoringEngine(customOptions = {}) {
   // 3. Load Scenarios
   const scenarios = customOptions.scenarios || (await loadScenarios(config));
   if (!scenarios || scenarios.length === 0) {
-    throw new Error('هیچ سناریویی برای اجرا یافت نشد.');
+    throw new Error('No scenarios found to execute.');
   }
 
   const reporter = new Reporter(config);
@@ -71,7 +71,7 @@ export async function runMonitoringEngine(customOptions = {}) {
     const extraHeaders = {};
     if (config.monitorKey) {
       extraHeaders['X-Monitor-Key'] = config.monitorKey;
-      console.log('🛡️ هدر امنیتی X-Monitor-Key به درخواست‌ها اضافه شد.');
+      console.log('🛡️ Security header X-Monitor-Key added to requests.');
     }
 
     context = await browser.newContext({
@@ -79,8 +79,8 @@ export async function runMonitoringEngine(customOptions = {}) {
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       extraHTTPHeaders: extraHeaders,
-      locale: 'fa-IR',
-      timezoneId: 'Asia/Tehran',
+      locale: 'en-US',
+      timezoneId: 'UTC',
     });
 
     page = await context.newPage();
@@ -100,25 +100,25 @@ export async function runMonitoringEngine(customOptions = {}) {
           ok: false,
           skipped: true,
           durationMs: 0,
-          message: 'به دلیل خطای مرحله قبل اجرا نشد (Skipped).',
+          message: 'Skipped due to previous step failure.',
         });
         continue;
       }
 
-      console.log(`\n⏳ اجرای سناریوی [${i + 1}/${scenarios.length}]: ${sc.name}...`);
+      console.log(`\n⏳ Running scenario [${i + 1}/${scenarios.length}]: ${sc.name}...`);
 
       let result;
       try {
         result = await sc.run(page, ctx);
         if (!result || typeof result.ok !== 'boolean') {
-          throw new Error('سناریو باید شیئی با فیلد boolean به نام ok برگرداند.');
+          throw new Error('Scenario must return an object with a boolean ok property.');
         }
       } catch (scenarioErr) {
         result = {
           name: sc.name,
           ok: false,
           durationMs: 0,
-          message: `خطای کنترل‌نشده در سناریو: ${scenarioErr.message}`,
+          message: `Unhandled scenario error: ${scenarioErr.message}`,
           error: scenarioErr,
         };
       }
@@ -127,13 +127,13 @@ export async function runMonitoringEngine(customOptions = {}) {
 
       if (!result.ok) {
         hasFailed = true;
-        console.error(`❌ شکست در سناریوی ${sc.name}: ${result.message}`);
+        console.error(`❌ Scenario ${sc.name} failed: ${result.message}`);
 
         await captureFailureScreenshot(page, reporter, config, sc.id || `step_${i + 1}`);
       }
     }
   } catch (fatalErr) {
-    console.error(`💥 خطای غیرمنتظره در موتور مانیتورینگ: ${fatalErr.message}`);
+    console.error(`💥 Unexpected error in monitoring engine: ${fatalErr.message}`);
 
     // If page is open when fatal error occurs, capture screenshot
     if (page && !page.isClosed()) {
@@ -141,7 +141,7 @@ export async function runMonitoringEngine(customOptions = {}) {
     }
 
     reporter.addResult({
-      name: 'راه‌اندازی مانیتورینگ',
+      name: 'Engine Initialization',
       ok: false,
       durationMs: 0,
       message: fatalErr.message,

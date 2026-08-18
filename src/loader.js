@@ -11,10 +11,10 @@ import { loginCustomer, addProductToCart, verifyCheckoutAndGateways } from './he
 export async function loadScenarios(config) {
   // 1. Check if monitor.config.js explicitly defines scenarios
   if (Array.isArray(config.scenarios) && config.scenarios.length > 0) {
-    console.log(`📂 بارگذاری ${config.scenarios.length} سناریو از فایل monitor.config.js`);
+    console.log(`📂 Loading ${config.scenarios.length} scenarios from monitor.config.js`);
     return config.scenarios.map((sc, idx) => ({
       id: sc.id || `scenario_${idx + 1}`,
-      name: sc.name || `سناریوی ${idx + 1}`,
+      name: sc.name || `Scenario ${idx + 1}`,
       run: typeof sc.run === 'function' ? sc.run : sc,
     }));
   }
@@ -28,7 +28,7 @@ export async function loadScenarios(config) {
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
     if (files.length > 0) {
-      console.log(`📂 کشف ${files.length} سناریو در دایرکتوری ${path.relative(process.cwd(), scenariosDir)}:`);
+      console.log(`📂 Discovered ${files.length} scenarios in ${path.relative(process.cwd(), scenariosDir)}:`);
       const loaded = [];
 
       for (const file of files) {
@@ -40,7 +40,7 @@ export async function loadScenarios(config) {
           const name = mod.name || mod.title || file.replace(/^[0-9]+[-_]?/, '').replace(/\.js$/, '');
 
           if (typeof runFn !== 'function') {
-            console.warn(`⚠️ فایل ${file} تابع export async function run(...) ندارد؛ نادیده گرفته شد.`);
+            console.warn(`⚠️ File ${file} does not export an async run function; skipped.`);
             continue;
           }
 
@@ -51,7 +51,7 @@ export async function loadScenarios(config) {
             run: runFn,
           });
         } catch (err) {
-          throw new Error(`خطا در بارگذاری سناریوی ${file}: ${err.message}`);
+          throw new Error(`Failed to load scenario ${file}: ${err.message}`);
         }
       }
 
@@ -62,10 +62,10 @@ export async function loadScenarios(config) {
   }
 
   // 3. Fallback to default built-in WooCommerce checks
-  console.log('ℹ️ هیچ سناریوی اختصاصی یافت نشد؛ استفاده از ۳ سناریوی استاندارد پیش‌فرض Core...');
+  console.log('ℹ️ No custom scenarios found; using default built-in WooCommerce checks...');
   return [
-    { id: 'login', name: 'ورود کاربر (Login)', run: loginCustomer },
-    { id: 'addToCart', name: 'افزودن به سبد خرید (Add to Cart)', run: addProductToCart },
-    { id: 'checkout', name: 'صفحه تسویه‌حساب و درگاه‌ها (Checkout)', run: verifyCheckoutAndGateways },
+    { id: 'login', name: 'Customer Login', run: loginCustomer },
+    { id: 'addToCart', name: 'Add to Cart', run: addProductToCart },
+    { id: 'checkout', name: 'Checkout & Payment Gateways', run: verifyCheckoutAndGateways },
   ];
 }

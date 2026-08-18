@@ -9,14 +9,14 @@ import { Selectors } from './selectors.js';
  */
 export async function loginCustomer(page, ctx, options = {}) {
   const startTime = Date.now();
-  const name = options.name || 'ورود کاربر (Login)';
+  const name = options.name || 'Customer Login';
   const { config } = ctx;
   const username = options.username || config.testUser;
   const password = options.password || config.testPass;
   const loginUrl = options.url || `${config.siteUrl}${config.accountPath || '/my-account/'}`;
 
   try {
-    console.log(`🔹 شروع فرآیند لاگین: هدایت به ${loginUrl}...`);
+    console.log(`🔹 Starting customer login: navigating to ${loginUrl}...`);
 
     await page.goto(loginUrl, {
       waitUntil: 'domcontentloaded',
@@ -30,7 +30,7 @@ export async function loginCustomer(page, ctx, options = {}) {
         name,
         ok: true,
         durationMs: Date.now() - startTime,
-        message: 'کاربر از قبل لاگین است (نشست فعال).',
+        message: 'Customer is already logged in (active session).',
       };
     }
 
@@ -54,7 +54,7 @@ export async function loginCustomer(page, ctx, options = {}) {
     const errorNotice = page.locator(Selectors.notices.error);
     if (await errorNotice.count() > 0 && await errorNotice.first().isVisible()) {
       const errorText = (await errorNotice.first().innerText()).trim();
-      throw new Error(`خطای ووکامرس در هنگام ورود: ${errorText}`);
+      throw new Error(`WooCommerce login error notice: ${errorText}`);
     }
 
     // Verify dashboard indicator
@@ -64,14 +64,14 @@ export async function loginCustomer(page, ctx, options = {}) {
       name,
       ok: true,
       durationMs: Date.now() - startTime,
-      message: 'ورود کاربر با موفقیت انجام شد و پنل کاربری مشاهده شد.',
+      message: 'Customer login successful; account dashboard displayed.',
     };
   } catch (err) {
     return {
       name,
       ok: false,
       durationMs: Date.now() - startTime,
-      message: `شکست در فرآیند لاگین: ${err.message}`,
+      message: `Customer login failed: ${err.message}`,
       error: err,
     };
   }
@@ -87,13 +87,13 @@ export async function loginCustomer(page, ctx, options = {}) {
  */
 export async function addProductToCart(page, ctx, options = {}) {
   const startTime = Date.now();
-  const name = options.name || 'افزودن به سبد خرید (Add to Cart)';
+  const name = options.name || 'Add to Cart';
   const { config } = ctx;
   const productId = options.productId || config.testProductId;
   const cartUrl = options.cartUrl || `${config.siteUrl}${config.cartPath || '/cart/'}`;
 
   try {
-    console.log(`🔹 افزودن محصول تست (ID: ${productId}) به سبد خرید...`);
+    console.log(`🔹 Adding test product (ID: ${productId}) to cart...`);
 
     const addUrl = options.url || `${config.siteUrl}/?add-to-cart=${productId}`;
     await page.goto(addUrl, {
@@ -112,7 +112,7 @@ export async function addProductToCart(page, ctx, options = {}) {
     const errorNotice = page.locator(Selectors.notices.error);
     if (await errorNotice.count() > 0 && await errorNotice.first().isVisible()) {
       const errorText = (await errorNotice.first().innerText()).trim();
-      throw new Error(`خطای ووکامرس در افزودن به سبد خرید: ${errorText}`);
+      throw new Error(`WooCommerce error while adding to cart: ${errorText}`);
     }
 
     // Verify cart page
@@ -126,7 +126,7 @@ export async function addProductToCart(page, ctx, options = {}) {
 
     // Fallback: If cart is empty after direct URL, try visiting single product page
     if (isCartEmpty) {
-      console.log(`   ↳ روش مستقیم ناموفق بود؛ تلاش از طریق صفحه محصول (?p=${productId})...`);
+      console.log(`   ↳ Direct URL did not populate cart; trying single product page (?p=${productId})...`);
       const productPageUrl = `${config.siteUrl}/?p=${productId}`;
       await page.goto(productPageUrl, {
         waitUntil: 'domcontentloaded',
@@ -138,7 +138,7 @@ export async function addProductToCart(page, ctx, options = {}) {
         await fallbackButton.click();
         await page.waitForLoadState('domcontentloaded').catch(() => {});
       } else {
-        throw new Error(`دکمه افزودن به سبد خرید در صفحه محصول (?p=${productId}) یافت نشد.`);
+        throw new Error(`Add to cart button not found on product page (?p=${productId}).`);
       }
 
       await page.goto(cartUrl, {
@@ -147,7 +147,7 @@ export async function addProductToCart(page, ctx, options = {}) {
       });
 
       if (await emptyNotice.count() > 0 && await emptyNotice.isVisible()) {
-        throw new Error('سبد خرید پس از هر دو روش مستقیم و دکمه صفحه محصول همچنان خالی است.');
+        throw new Error('Cart remains empty after trying both direct URL and product page button clicks.');
       }
     }
 
@@ -160,14 +160,14 @@ export async function addProductToCart(page, ctx, options = {}) {
       name,
       ok: true,
       durationMs: Date.now() - startTime,
-      message: 'محصول با موفقیت به سبد خرید افزوده شد.',
+      message: 'Product successfully added to cart.',
     };
   } catch (err) {
     return {
       name,
       ok: false,
       durationMs: Date.now() - startTime,
-      message: `شکست در افزودن به سبد خرید: ${err.message}`,
+      message: `Failed to add product to cart: ${err.message}`,
       error: err,
     };
   }
@@ -183,12 +183,12 @@ export async function addProductToCart(page, ctx, options = {}) {
  */
 export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
   const startTime = Date.now();
-  const name = options.name || 'صفحه تسویه‌حساب و درگاه‌ها (Checkout & Gateways)';
+  const name = options.name || 'Checkout & Payment Gateways';
   const { config } = ctx;
   const checkoutUrl = options.url || `${config.siteUrl}${config.checkoutPath || '/checkout/'}`;
 
   try {
-    console.log(`🔹 بررسی صفحه تسویه‌حساب و درگاه‌های پرداخت: ${checkoutUrl}...`);
+    console.log(`🔹 Verifying checkout page and payment gateways: ${checkoutUrl}...`);
 
     await page.goto(checkoutUrl, {
       waitUntil: 'domcontentloaded',
@@ -199,7 +199,7 @@ export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
     const errorNotice = page.locator(Selectors.notices.error);
     if (await errorNotice.count() > 0 && await errorNotice.first().isVisible()) {
       const errorText = (await errorNotice.first().innerText()).trim();
-      throw new Error(`خطای ووکامرس در صفحه تسویه‌حساب: ${errorText}`);
+      throw new Error(`WooCommerce error on checkout page: ${errorText}`);
     }
 
     // Verify form
@@ -249,27 +249,27 @@ export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
     }
 
     if (gatewayCount === 0) {
-      throw new Error('هیچ درگاه یا روش پرداختی در صفحه تسویه‌حساب یافت نشد.');
+      throw new Error('No payment gateways or methods found on checkout page.');
     }
 
     // Check no-gateways notice
     const noGatewayNotice = page.locator(Selectors.checkout.noGatewaysNotice).first();
     if (await noGatewayNotice.count() > 0 && await noGatewayNotice.isVisible()) {
-      throw new Error('پیام عدم دسترسی به روش‌های پرداخت در صفحه تسویه‌حساب مشاهده شد.');
+      throw new Error('No payment methods available notice displayed on checkout page.');
     }
 
     return {
       name,
       ok: true,
       durationMs: Date.now() - startTime,
-      message: `صفحه تسویه‌حساب و ${gatewayCount} روش پرداخت با موفقیت رندر شدند.`,
+      message: `Checkout page and ${gatewayCount} payment method(s) rendered successfully.`,
     };
   } catch (err) {
     return {
       name,
       ok: false,
       durationMs: Date.now() - startTime,
-      message: `شکست در بررسی صفحه تسویه‌حساب/درگاه‌ها: ${err.message}`,
+      message: `Checkout / Gateways check failed: ${err.message}`,
       error: err,
     };
   }

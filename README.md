@@ -1,30 +1,43 @@
 # wp-monitor
 
-هسته‌ی reusable برای مانیتورینگ E2E سایت‌های WordPress/WooCommerce با Node.js و Playwright. این repository به‌عنوان Git submodule داخل مخزن هر سایت مصرف می‌شود؛ سناریوهای سایت نباید داخل core قرار بگیرند.
+Reusable core engine for E2E monitoring of WordPress & WooCommerce stores powered by Node.js and Playwright.
 
-## مسئولیت‌های core
+This repository is designed to be consumed as a **Git submodule** inside individual site repositories. Site-specific test flows belong in each store's repository, keeping this core strictly reusable.
 
-- اجرای browser/context و ارسال هدر `X-Monitor-Key`
-- اجرای زنجیره‌ای scenarioها و skip کردن مراحل بعد از اولین failure
-- ثبت زمان، نتیجه و پیام هر مرحله
-- گرفتن screenshot در failure و ارسال گزارش Telegram
-- helperهای عمومی login، cart و checkout ووکامرس
-- کشف scenarioها از دایرکتوری `scenarios/` مخزن والد
+---
 
-## قرارداد سناریو
+## 🏛 Core Responsibilities
 
-```js
-export const name = 'My scenario';
+- **Playwright Lifecycle**: Headless/headful browser launch, viewport & timeout configuration, and custom `X-Monitor-Key` header injection for WAF bypass.
+- **Chain of Responsibility**: Sequential scenario execution with automatic skipping of downstream steps upon the first failure.
+- **Diagnostics**: Step timing calculation, formatted console summary, and full-page failure screenshot capture.
+- **Notifications**: Robust Telegram reporting (HTML alert formatting and photo uploads).
+- **WooCommerce Helpers**: Battle-tested helpers for customer login, add to cart (with product page fallback), and checkout payment gateway rendering (handling AJAX updates).
+- **Dynamic Scenario Discovery**: Automatic discovery and ordering of scenario files from the consumer repo's `scenarios/` directory.
 
+---
+
+## ✍️ Scenario Contract
+
+Every scenario file in `scenarios/` must export a `name` and an async `run` function:
+
+```javascript
+export const name = 'My Custom Scenario';
+
+/**
+ * @param {import('playwright').Page} page - Active Playwright page
+ * @param {object} ctx - { config, reporter, browser, context, page }
+ * @returns {Promise<{ name: string, ok: boolean, durationMs: number, message: string }>}
+ */
 export async function run(page, ctx) {
   const startedAt = Date.now();
   try {
-    // site-specific Playwright steps
+    // Custom Playwright actions...
     return {
       name,
       ok: true,
       durationMs: Date.now() - startedAt,
-      message: 'Scenario completed',
+      message: 'Step completed successfully',
     };
   } catch (error) {
     return {
@@ -38,38 +51,43 @@ export async function run(page, ctx) {
 }
 ```
 
-`ctx` شامل `config`, `reporter`, `browser`, `context` و `page` است. core اجرای scenario را نیز در برابر throw شدن یا خروجی بدون `ok` مقاوم می‌کند.
+---
 
-## مصرف به‌عنوان submodule
+## 🚀 Adding Core to a Site Repository
 
 ```bash
+# Add as submodule
 git submodule add https://github.com/abolfazl-moeini/wp-monitor.git core
 git submodule update --init --recursive
-```
 
-مخزن والد باید dependencyهای package خود را نصب کند و از CLI زیر اجرا شود:
-
-```bash
+# Install dependencies and Playwright Chromium
 npm ci
+npx playwright install chromium
+
+# Run monitor
 npm start
 ```
 
-## تنظیمات
+---
 
-تنظیمات از `.env` در ریشه‌ی مخزن والد خوانده می‌شوند. نمونه‌ی کامل در [`core/.env.example`](./.env.example) قرار دارد. مقادیر credential، Telegram token و WAF key نباید commit شوند.
+## 📄 Configuration
 
-## انتشار core
+Configuration is loaded from the consumer repository's `.env` file. See [`.env.example`](./.env.example) for all available options.
 
-پس از تغییر core، ابتدا در همین repository commit و push کنید؛ سپس در هر مخزن سایت اشاره‌گر submodule را update و commit کنید:
+---
+
+## 🔄 Publishing & Updating Core
 
 ```bash
+# 1. Commit and push in wp-monitor
 git add .
-git commit -m "fix: improve monitor core"
+git commit -m "fix(core): improve checkout payment gateway wait"
 git push origin main
 
-# در مخزن سایت
+# 2. Update submodule in each site repo
+cd /path/to/site-repo
 git submodule update --remote core
 git add core
-git commit -m "chore: update wp-monitor core"
+git commit -m "chore: bump wp-monitor core submodule"
 git push
 ```

@@ -9,7 +9,7 @@ export class Notifier {
     try {
       data = JSON.parse(body);
     } catch {
-      throw new Error(`پاسخ نامعتبر از Telegram API (HTTP ${response.status})`);
+      throw new Error(`Invalid response from Telegram API (HTTP ${response.status})`);
     }
 
     if (!response.ok || !data.ok) {
@@ -25,12 +25,12 @@ export class Notifier {
    */
   static async sendReport(reporter, config) {
     if (!config.tgToken || !config.tgChat) {
-      console.log('ℹ️ تنظیمات تلگرام (TG_TOKEN یا TG_CHAT) وجود ندارد؛ ارسال پیام نادیده گرفته شد.');
+      console.log('ℹ️ Telegram settings (TG_TOKEN or TG_CHAT) missing; skipping notification.');
       return;
     }
 
     if (reporter.isSuccess && config.quietOnSuccess) {
-      console.log('ℹ️ سناریوها موفق بودند و QUIET_ON_SUCCESS فعال است؛ پیامی به تلگرام ارسال نشد.');
+      console.log('ℹ️ All scenarios passed and QUIET_ON_SUCCESS is enabled; skipping Telegram message.');
       return;
     }
 
@@ -43,9 +43,9 @@ export class Notifier {
       } else {
         await Notifier.sendMessage(messageText, config);
       }
-      console.log('📬 گزارش با موفقیت به تلگرام ارسال شد.');
+      console.log('📬 Monitoring report sent to Telegram successfully.');
     } catch (err) {
-      console.error(`⚠️ خطا در ارسال گزارش به تلگرام: ${err.message}`);
+      console.error(`⚠️ Failed to send report to Telegram: ${err.message}`);
     }
   }
 
@@ -93,7 +93,7 @@ export class Notifier {
     try {
       data = await Notifier.parseResponse(response);
     } catch (err) {
-      console.warn(`⚠️ ارسال عکس ناموفق بود (${err.message})؛ ارسال به صورت پیام متنی ساده...`);
+      console.warn(`⚠️ Photo upload failed (${err.message}); falling back to plain text message...`);
       await Notifier.sendMessage(caption, config);
       return;
     }

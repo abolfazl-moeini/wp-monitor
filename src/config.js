@@ -88,7 +88,7 @@ export async function loadSiteConfig() {
         if (siteConfig.checkoutPath && !process.env.CHECKOUT_PATH) config.checkoutPath = normalizePath(siteConfig.checkoutPath, '/checkout/');
       }
     } catch (err) {
-      throw new Error(`خطای نحوی یا بارگذاری در فایل monitor.config.js: ${err.message}`);
+      throw new Error(`Syntax or loading error in monitor.config.js: ${err.message}`);
     }
   }
   config.siteUrl = normalizeUrl(config.siteUrl);
@@ -106,30 +106,30 @@ export function validateConfig() {
 
   if (missing.length > 0) {
     throw new Error(
-      `❌ تنظیمات اجباری زیر در فایل .env یا Environment یافت نشدند:\n` +
+      `❌ Missing required environment variables:\n` +
       missing.map((m) => `   - ${m}`).join('\n') +
-      `\nلطفاً فایل .env را در ریشه مخزن سایت طبق .env.example تنظیم کنید.`
+      `\nPlease set them in your .env file or environment.`
     );
   }
 
   try {
     const siteUrl = new URL(config.siteUrl);
     if (!['http:', 'https:'].includes(siteUrl.protocol)) {
-      throw new Error('SITE_URL باید با http:// یا https:// شروع شود.');
+      throw new Error('SITE_URL must start with http:// or https://');
     }
   } catch {
-    throw new Error('SITE_URL معتبر نیست؛ یک آدرس کامل مانند https://example.com وارد کنید.');
+    throw new Error('SITE_URL is invalid; provide a valid URL like https://example.com');
   }
 
   if (!/^\d+$/.test(String(config.testProductId))) {
-    throw new Error('TEST_PRODUCT_ID باید شناسه عددی محصول ووکامرس باشد.');
+    throw new Error('TEST_PRODUCT_ID must be a numeric WooCommerce product ID.');
   }
 
   if (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1000) {
-    throw new Error('TIMEOUT_MS باید یک عدد صحیح حداقل 1000 باشد.');
+    throw new Error('TIMEOUT_MS must be an integer >= 1000.');
   }
 
   if ((config.tgToken && !config.tgChat) || (!config.tgToken && config.tgChat)) {
-    throw new Error('برای ارسال تلگرام، TG_TOKEN و TG_CHAT باید هر دو مقدار داشته باشند.');
+    throw new Error('Both TG_TOKEN and TG_CHAT must be provided for Telegram notifications.');
   }
 }
