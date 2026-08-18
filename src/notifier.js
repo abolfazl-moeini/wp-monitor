@@ -3,6 +3,21 @@ import path from 'path';
 import { Blob } from 'buffer';
 
 export class Notifier {
+  static async parseResponse(response) {
+    const body = await response.text();
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      throw new Error(`پاسخ نامعتبر از Telegram API (HTTP ${response.status})`);
+    }
+
+    if (!response.ok || !data.ok) {
+      throw new Error(`Telegram API Error: [${data.error_code || response.status}] ${data.description || body}`);
+    }
+    return data;
+  }
+
   /**
    * Sends the final monitoring report to Telegram
    * @param {import('./reporter.js').Reporter} reporter
@@ -45,13 +60,9 @@ export class Notifier {
         parse_mode: 'HTML',
         disable_web_page_preview: true,
       }),
+      signal: AbortSignal.timeout(10000),
     });
-
-    const data = await response.json();
-    if (!data.ok) {
-      throw new Error(`Telegram API Error: [${data.error_code}] ${data.description}`);
-    }
-    return data;
+    return Notifier.parseResponse(response);
   }
 
   static async sendPhoto(filePath, caption, config) {
@@ -59,27 +70,30 @@ export class Notifier {
     const fileBuffer = fs.readFileSync(filePath);
     const blob = new Blob([fileBuffer], { type: 'image/png' });
 
-    let trimmedCaption = caption;
-    let separateMessageNeeded = false;
-    if (trimmedCaption.length > 1000) {
-      trimmedCaption = caption.substring(0, 990) + '...';
-      separateMessageNeeded = true;
-    }
+    // Send the photo caption as plain text so truncating it cannot break
+    // Telegram's HTML parser in the middle of a tag.
+    const plainCaption = caption.replace(/<[^>]*>/g, '');
+    const separateMessageNeeded = plainCaption.length > 1024;
+    const trimmedCaption = separateMessageNeeded
+      ? `${plainCaption.slice(0, 1021)}...`
+      : plainCaption;
 
     const formData = new FormData();
     formData.append('chat_id', config.tgChat);
     formData.append('photo', blob, path.basename(filePath));
     formData.append('caption', trimmedCaption);
-    formData.append('parse_mode', 'HTML');
 
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
+      signal: AbortSignal.timeout(10000),
     });
 
-    const data = await response.json();
-    if (!data.ok) {
-      console.warn(`⚠️ ارسال عکس ناموفق بود (${data.description})؛ ارسال به صورت پیام متنی ساده...`);
+    let data;
+    try {
+      data = await Notifier.parseResponse(response);
+    } catch (err) {
+      console.warn(`⚠️ ارسال عکس ناموفق بود (${err.message})؛ ارسال به صورت پیام متنی ساده...`);
       await Notifier.sendMessage(caption, config);
       return;
     }

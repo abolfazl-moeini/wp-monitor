@@ -7,7 +7,22 @@ import { Reporter } from './reporter.js';
 import { Notifier } from './notifier.js';
 
 function sanitizeForFileName(str) {
-  return str.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_').toLowerCase();
+  return String(str).replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_').toLowerCase();
+}
+
+async function captureFailureScreenshot(page, reporter, config, scenarioId) {
+  if (!page) return;
+
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const cleanName = sanitizeForFileName(scenarioId);
+    const screenshotPath = path.join(config.artifactsDir, `failure-${timestamp}-${cleanName}.png`);
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    reporter.setScreenshot(screenshotPath);
+    console.log(`📸 اسکرین‌شات از وضعیت خطا ثبت شد: ${screenshotPath}`);
+  } catch (screenErr) {
+    console.error(`⚠️ خطا در گرفتن اسکرین‌شات: ${screenErr.message}`);
+  }
 }
 
 /**
@@ -72,7 +87,7 @@ export async function runMonitoringEngine(customOptions = {}) {
     page.setDefaultTimeout(config.timeoutMs);
     page.setDefaultNavigationTimeout(config.timeoutMs);
 
-    const ctx = { config, reporter, browser, context };
+    const ctx = { config, reporter, browser, context, page };
     let hasFailed = false;
 
     // 5. Execute Chain of Responsibility
@@ -91,25 +106,30 @@ export async function runMonitoringEngine(customOptions = {}) {
       }
 
       console.log(`\n⏳ اجرای سناریوی [${i + 1}/${scenarios.length}]: ${sc.name}...`);
-      const result = await sc.run(page, ctx);
+
+      let result;
+      try {
+        result = await sc.run(page, ctx);
+        if (!result || typeof result.ok !== 'boolean') {
+          throw new Error('سناریو باید شیئی با فیلد boolean به نام ok برگرداند.');
+        }
+      } catch (scenarioErr) {
+        result = {
+          name: sc.name,
+          ok: false,
+          durationMs: 0,
+          message: `خطای کنترل‌نشده در سناریو: ${scenarioErr.message}`,
+          error: scenarioErr,
+        };
+      }
+
       reporter.addResult(result);
 
       if (!result.ok) {
         hasFailed = true;
         console.error(`❌ شکست در سناریوی ${sc.name}: ${result.message}`);
 
-        try {
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const cleanName = sanitizeForFileName(sc.id || `step_${i + 1}`);
-          const screenshotFileName = `failure-${timestamp}-${cleanName}.png`;
-          const screenshotPath = path.join(config.artifactsDir, screenshotFileName);
-
-          await page.screenshot({ path: screenshotPath, fullPage: true });
-          reporter.setScreenshot(screenshotPath);
-          console.log(`📸 اسکرین‌شات از وضعیت خطا ثبت شد: ${screenshotPath}`);
-        } catch (screenErr) {
-          console.error(`⚠️ خطا در گرفتن اسکرین‌شات: ${screenErr.message}`);
-        }
+        await captureFailureScreenshot(page, reporter, config, sc.id || `step_${i + 1}`);
       }
     }
   } catch (fatalErr) {

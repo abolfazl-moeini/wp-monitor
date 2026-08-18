@@ -45,10 +45,10 @@ export async function loginCustomer(page, ctx, options = {}) {
 
     const submitLoc = page.locator(options.submitSelector || Selectors.login.submit).first();
 
-    await Promise.all([
-      page.waitForLoadState('domcontentloaded'),
-      submitLoc.click(),
-    ]);
+    // Some themes submit through AJAX and do not navigate. Waiting after the
+    // click keeps both classic forms and AJAX forms supported.
+    await submitLoc.click();
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
 
     // Check for errors
     const errorNotice = page.locator(Selectors.notices.error);
@@ -102,10 +102,8 @@ export async function addProductToCart(page, ctx, options = {}) {
     // Check if on product page with add to cart button
     const singleButton = page.locator(Selectors.cart.singleAddToCartButton(productId)).first();
     if (await singleButton.count() > 0 && await singleButton.isVisible()) {
-      await Promise.all([
-        page.waitForLoadState('domcontentloaded'),
-        singleButton.click(),
-      ]);
+      await singleButton.click();
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
     }
 
     // Check error notices
@@ -127,8 +125,10 @@ export async function addProductToCart(page, ctx, options = {}) {
       throw new Error('سبد خرید پس از درخواست افزودن محصول، همچنان خالی است.');
     }
 
-    const cartContent = page.locator(Selectors.cart.cartContent).first();
-    await cartContent.waitFor({ state: 'visible', timeout: config.timeoutMs });
+    // A visible cart wrapper alone is not enough: empty carts often render
+    // the same wrapper. Require at least one visible cart item.
+    const cartItem = page.locator(Selectors.cart.item).first();
+    await cartItem.waitFor({ state: 'visible', timeout: config.timeoutMs });
 
     return {
       name,
@@ -183,23 +183,29 @@ export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
     const paymentSection = page.locator(Selectors.checkout.paymentSection).first();
     await paymentSection.waitFor({ state: 'visible', timeout: config.timeoutMs });
 
-    // Locate payment methods
+    // Locate payment methods. Count only visible methods; hidden template
+    // nodes must not make a broken checkout look healthy.
     let gatewayCount = 0;
     for (const sel of Selectors.checkout.paymentCandidateSelectors) {
       const loc = page.locator(sel);
       try {
         const count = await loc.count();
-        if (count > 0) {
-          gatewayCount = count;
+        for (let i = 0; i < count; i += 1) {
+          if (await loc.nth(i).isVisible()) gatewayCount += 1;
+        }
+        if (gatewayCount > 0) {
           break;
         }
       } catch {}
     }
 
     if (gatewayCount === 0) {
-      const fallbackLoc = page.locator('input[name="payment_method"], ul.wc_payment_methods li, .wc-block-checkout__payment-method').first();
+      const fallbackLoc = page.locator(Selectors.checkout.paymentFallback).first();
       await fallbackLoc.waitFor({ state: 'attached', timeout: config.timeoutMs });
-      gatewayCount = await page.locator('input[name="payment_method"], ul.wc_payment_methods li, .wc-block-checkout__payment-method').count();
+      const fallbackCount = await page.locator(Selectors.checkout.paymentFallback).count();
+      for (let i = 0; i < fallbackCount; i += 1) {
+        if (await page.locator(Selectors.checkout.paymentFallback).nth(i).isVisible()) gatewayCount += 1;
+      }
     }
 
     if (gatewayCount === 0) {

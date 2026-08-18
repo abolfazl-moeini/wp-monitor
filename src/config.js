@@ -26,6 +26,11 @@ function normalizeUrl(urlStr) {
   return trimmed.replace(/\/+$/, '');
 }
 
+function parseTimeout(value, defaultValue = 30000) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
 export const config = {
   siteUrl: normalizeUrl(process.env.SITE_URL || ''),
   testUser: (process.env.TEST_USER || '').trim(),
@@ -35,13 +40,11 @@ export const config = {
   // Telegram
   tgToken: (process.env.TG_TOKEN || '').trim(),
   tgChat: (process.env.TG_CHAT || '').trim(),
-  tgProxy: (process.env.TG_PROXY || '').trim(),
-
   // Security / WAF
   monitorKey: (process.env.MONITOR_KEY || '').trim(),
 
   // Execution
-  timeoutMs: parseInt(process.env.TIMEOUT_MS || '30000', 10) || 30000,
+  timeoutMs: parseTimeout(process.env.TIMEOUT_MS),
   headless: parseBool(process.env.HEADLESS, true),
   quietOnSuccess: parseBool(process.env.QUIET_ON_SUCCESS, false),
 
@@ -64,9 +67,12 @@ export async function loadSiteConfig() {
         Object.assign(config, siteConfig);
       }
     } catch (err) {
-      console.warn(`⚠️ خطا در خواندن monitor.config.js: ${err.message}`);
+      throw new Error(`خطا در خواندن monitor.config.js: ${err.message}`);
     }
   }
+  config.siteUrl = normalizeUrl(config.siteUrl);
+  config.artifactsDir = path.resolve(process.cwd(), config.artifactsDir || 'artifacts');
+  config.scenariosDir = path.resolve(process.cwd(), config.scenariosDir || 'scenarios');
   return config;
 }
 
@@ -83,5 +89,26 @@ export function validateConfig() {
       missing.map((m) => `   - ${m}`).join('\n') +
       `\nلطفاً فایل .env را در ریشه مخزن سایت طبق .env.example تنظیم کنید.`
     );
+  }
+
+  try {
+    const siteUrl = new URL(config.siteUrl);
+    if (!['http:', 'https:'].includes(siteUrl.protocol)) {
+      throw new Error('SITE_URL باید با http:// یا https:// شروع شود.');
+    }
+  } catch {
+    throw new Error('SITE_URL معتبر نیست؛ یک آدرس کامل مانند https://example.com وارد کنید.');
+  }
+
+  if (!/^\d+$/.test(String(config.testProductId))) {
+    throw new Error('TEST_PRODUCT_ID باید شناسه عددی محصول ووکامرس باشد.');
+  }
+
+  if (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1000) {
+    throw new Error('TIMEOUT_MS باید یک عدد صحیح حداقل 1000 باشد.');
+  }
+
+  if ((config.tgToken && !config.tgChat) || (!config.tgToken && config.tgChat)) {
+    throw new Error('برای ارسال تلگرام، TG_TOKEN و TG_CHAT باید هر دو مقدار داشته باشند.');
   }
 }

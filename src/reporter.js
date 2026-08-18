@@ -1,3 +1,11 @@
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export class Reporter {
   constructor(config = {}) {
     this.config = config;
@@ -75,7 +83,7 @@ export class Reporter {
   formatTelegramMessage() {
     const totalSec = (this.totalDurationMs / 1000).toFixed(1);
     const overallIcon = this.isSuccess ? '✅' : '🚨';
-    const siteTitle = this.config.siteName ? ` [${this.config.siteName}]` : '';
+    const siteTitle = this.config.siteName ? ` [${escapeHtml(this.config.siteName)}]` : '';
     const statusHeader = this.isSuccess
       ? `<b>مانیتورینگ ووکامرس${siteTitle}: همه چیز مرتب است</b>`
       : `<b>هشدار: اختلال در فرآیندهای ووکامرس${siteTitle}</b>`;
@@ -83,7 +91,7 @@ export class Reporter {
     const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     let message = `${overallIcon} ${statusHeader}\n\n`;
-    message += `🌐 <b>سایت:</b> <code>${this.config.siteUrl}</code>\n`;
+    message += `🌐 <b>سایت:</b> <code>${escapeHtml(this.config.siteUrl)}</code>\n`;
     message += `📅 <b>زمان:</b> <code>${dateStr} UTC</code>\n`;
     message += `⏱ <b>مدت زمان کل:</b> <code>${totalSec}s</code>\n\n`;
     message += `📋 <b>وضعیت سناریوها:</b>\n`;
@@ -92,22 +100,20 @@ export class Reporter {
 
     for (const r of this.results) {
       const stepSec = (r.durationMs / 1000).toFixed(1);
+      const resultName = escapeHtml(r.name);
       if (r.skipped) {
-        message += `  ⏭️ <i>${r.name}</i> (رد شد)\n`;
+        message += `  ⏭️ <i>${resultName}</i> (رد شد)\n`;
       } else if (r.ok) {
-        message += `  ✅ <b>${r.name}</b> (<code>${stepSec}s</code>)\n`;
+        message += `  ✅ <b>${resultName}</b> (<code>${stepSec}s</code>)\n`;
       } else {
-        message += `  ❌ <b>${r.name}</b> (<code>${stepSec}s</code>) — <b>خطا</b>\n`;
+        message += `  ❌ <b>${resultName}</b> (<code>${stepSec}s</code>) — <b>خطا</b>\n`;
         if (!failedStep) failedStep = r;
       }
     }
 
     if (failedStep) {
-      message += `\n⚠️ <b>علت خطا در مرحله [${failedStep.name}]:</b>\n`;
-      const sanitizedError = (failedStep.message || 'نامشخص')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      message += `\n⚠️ <b>علت خطا در مرحله [${escapeHtml(failedStep.name)}]:</b>\n`;
+      const sanitizedError = escapeHtml(failedStep.message || 'نامشخص');
       message += `<code>${sanitizedError.substring(0, 500)}</code>\n`;
 
       if (this.screenshotPath) {

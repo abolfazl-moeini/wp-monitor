@@ -46,6 +46,13 @@ export const Selectors = {
   },
 
   cart: {
+    item: [
+      '.cart_item',
+      '.woocommerce-cart-form__cart-item',
+      '.wc-block-cart-item',
+      '.wc-block-cart-items__row',
+    ].join(', '),
+
     singleAddToCartButton: (productId) => [
       'button.single_add_to_cart_button',
       'button[name="add-to-cart"]',
@@ -65,7 +72,6 @@ export const Selectors = {
     cartContent: [
       'form.woocommerce-cart-form',
       'table.shop_table.cart',
-      '.cart_item',
       '.wc-block-cart',
       '.woocommerce-cart',
     ].join(', '),
@@ -96,6 +102,8 @@ export const Selectors = {
       '.wc-block-checkout__payment-method',
       '.wc-block-components-radio-control__option',
     ],
+
+    paymentFallback: 'input[name="payment_method"], ul.wc_payment_methods li, .wc-block-checkout__payment-method, .wc-block-components-radio-control__option',
 
     noGatewaysNotice: [
       ':text("هیچ روش پرداختی وجود ندارد")',
