@@ -26,6 +26,15 @@ function normalizeUrl(urlStr) {
   return trimmed.replace(/\/+$/, '');
 }
 
+function normalizePath(p, defaultPath) {
+  if (!p || typeof p !== 'string') return defaultPath;
+  let trimmed = p.trim();
+  if (!trimmed) return defaultPath;
+  if (!trimmed.startsWith('/')) trimmed = `/${trimmed}`;
+  if (!trimmed.endsWith('/')) trimmed = `${trimmed}/`;
+  return trimmed;
+}
+
 function parseTimeout(value, defaultValue = 30000) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
@@ -36,10 +45,16 @@ export const config = {
   testUser: (process.env.TEST_USER || '').trim(),
   testPass: process.env.TEST_PASS || '',
   testProductId: (process.env.TEST_PRODUCT_ID || '').trim(),
-  
+
+  // Customizable paths (optional)
+  accountPath: normalizePath(process.env.ACCOUNT_PATH, '/my-account/'),
+  cartPath: normalizePath(process.env.CART_PATH, '/cart/'),
+  checkoutPath: normalizePath(process.env.CHECKOUT_PATH, '/checkout/'),
+
   // Telegram
   tgToken: (process.env.TG_TOKEN || '').trim(),
   tgChat: (process.env.TG_CHAT || '').trim(),
+
   // Security / WAF
   monitorKey: (process.env.MONITOR_KEY || '').trim(),
 
@@ -55,7 +70,8 @@ export const config = {
 };
 
 /**
- * Optionally loads monitor.config.js from the site repository root
+ * Loads site configuration from monitor.config.js
+ * Strictly preserves runtime environment variables and only applies site-level metadata/scenarios.
  */
 export async function loadSiteConfig() {
   const configFile = path.resolve(process.cwd(), 'monitor.config.js');
@@ -63,11 +79,16 @@ export async function loadSiteConfig() {
     try {
       const module = await import(pathToFileURL(configFile).href);
       const siteConfig = module.default || module;
-      if (typeof siteConfig === 'object') {
-        Object.assign(config, siteConfig);
+      if (typeof siteConfig === 'object' && siteConfig !== null) {
+        if (siteConfig.siteName) config.siteName = siteConfig.siteName;
+        if (siteConfig.scenarios) config.scenarios = siteConfig.scenarios;
+        if (siteConfig.scenariosDir) config.scenariosDir = path.resolve(process.cwd(), siteConfig.scenariosDir);
+        if (siteConfig.accountPath && !process.env.ACCOUNT_PATH) config.accountPath = normalizePath(siteConfig.accountPath, '/my-account/');
+        if (siteConfig.cartPath && !process.env.CART_PATH) config.cartPath = normalizePath(siteConfig.cartPath, '/cart/');
+        if (siteConfig.checkoutPath && !process.env.CHECKOUT_PATH) config.checkoutPath = normalizePath(siteConfig.checkoutPath, '/checkout/');
       }
     } catch (err) {
-      throw new Error(`خطا در خواندن monitor.config.js: ${err.message}`);
+      throw new Error(`خطای نحوی یا بارگذاری در فایل monitor.config.js: ${err.message}`);
     }
   }
   config.siteUrl = normalizeUrl(config.siteUrl);

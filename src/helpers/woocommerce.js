@@ -13,7 +13,7 @@ export async function loginCustomer(page, ctx, options = {}) {
   const { config } = ctx;
   const username = options.username || config.testUser;
   const password = options.password || config.testPass;
-  const loginUrl = options.url || `${config.siteUrl}/my-account/`;
+  const loginUrl = options.url || `${config.siteUrl}${config.accountPath || '/my-account/'}`;
 
   try {
     console.log(`🔹 شروع فرآیند لاگین: هدایت به ${loginUrl}...`);
@@ -79,6 +79,7 @@ export async function loginCustomer(page, ctx, options = {}) {
 
 /**
  * Standard Add Product to Cart helper
+ * Supports direct URL parameter (?add-to-cart=ID) with fallback to single product page button click.
  * @param {import('playwright').Page} page
  * @param {object} ctx
  * @param {object} [options]
@@ -89,6 +90,7 @@ export async function addProductToCart(page, ctx, options = {}) {
   const name = options.name || 'افزودن به سبد خرید (Add to Cart)';
   const { config } = ctx;
   const productId = options.productId || config.testProductId;
+  const cartUrl = options.cartUrl || `${config.siteUrl}${config.cartPath || '/cart/'}`;
 
   try {
     console.log(`🔹 افزودن محصول تست (ID: ${productId}) به سبد خرید...`);
@@ -114,15 +116,39 @@ export async function addProductToCart(page, ctx, options = {}) {
     }
 
     // Verify cart page
-    const cartUrl = options.cartUrl || `${config.siteUrl}/cart/`;
     await page.goto(cartUrl, {
       waitUntil: 'domcontentloaded',
       timeout: config.timeoutMs,
     });
 
     const emptyNotice = page.locator(Selectors.cart.emptyNotice).first();
-    if (await emptyNotice.count() > 0 && await emptyNotice.isVisible()) {
-      throw new Error('سبد خرید پس از درخواست افزودن محصول، همچنان خالی است.');
+    const isCartEmpty = (await emptyNotice.count() > 0) && (await emptyNotice.isVisible());
+
+    // Fallback: If cart is empty after direct URL, try visiting single product page
+    if (isCartEmpty) {
+      console.log(`   ↳ روش مستقیم ناموفق بود؛ تلاش از طریق صفحه محصول (?p=${productId})...`);
+      const productPageUrl = `${config.siteUrl}/?p=${productId}`;
+      await page.goto(productPageUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: config.timeoutMs,
+      });
+
+      const fallbackButton = page.locator(Selectors.cart.singleAddToCartButton(productId)).first();
+      if (await fallbackButton.count() > 0 && await fallbackButton.isVisible()) {
+        await fallbackButton.click();
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
+      } else {
+        throw new Error(`دکمه افزودن به سبد خرید در صفحه محصول (?p=${productId}) یافت نشد.`);
+      }
+
+      await page.goto(cartUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: config.timeoutMs,
+      });
+
+      if (await emptyNotice.count() > 0 && await emptyNotice.isVisible()) {
+        throw new Error('سبد خرید پس از هر دو روش مستقیم و دکمه صفحه محصول همچنان خالی است.');
+      }
     }
 
     // A visible cart wrapper alone is not enough: empty carts often render
@@ -149,6 +175,7 @@ export async function addProductToCart(page, ctx, options = {}) {
 
 /**
  * Standard Checkout and Payment Gateways check helper
+ * Waits for AJAX order review settlement and verifies available payment methods.
  * @param {import('playwright').Page} page
  * @param {object} ctx
  * @param {object} [options]
@@ -158,7 +185,7 @@ export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
   const startTime = Date.now();
   const name = options.name || 'صفحه تسویه‌حساب و درگاه‌ها (Checkout & Gateways)';
   const { config } = ctx;
-  const checkoutUrl = options.url || `${config.siteUrl}/checkout/`;
+  const checkoutUrl = options.url || `${config.siteUrl}${config.checkoutPath || '/checkout/'}`;
 
   try {
     console.log(`🔹 بررسی صفحه تسویه‌حساب و درگاه‌های پرداخت: ${checkoutUrl}...`);
@@ -182,6 +209,19 @@ export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
     // Verify payment section
     const paymentSection = page.locator(Selectors.checkout.paymentSection).first();
     await paymentSection.waitFor({ state: 'visible', timeout: config.timeoutMs });
+
+    // Wait for payment methods to settle (handling AJAX delay in classic and block themes)
+    const paymentMethodsLocator = page.locator([
+      'ul.wc_payment_methods > li.wc_payment_method',
+      'ul.payment_methods > li',
+      '.wc-block-checkout__payment-method',
+      '.wc-block-components-radio-control__option',
+      '#payment .payment_methods li',
+    ].join(', '));
+
+    try {
+      await paymentMethodsLocator.first().waitFor({ state: 'attached', timeout: Math.min(config.timeoutMs, 10000) });
+    } catch {}
 
     // Locate payment methods. Count only visible methods; hidden template
     // nodes must not make a broken checkout look healthy.

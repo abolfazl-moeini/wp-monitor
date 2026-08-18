@@ -1,3 +1,5 @@
+import path from 'path';
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -117,7 +119,8 @@ export class Reporter {
       message += `<code>${sanitizedError.substring(0, 500)}</code>\n`;
 
       if (this.screenshotPath) {
-        message += `\n📸 <i>اسکرین‌شات از لحظه بروز خطا ثبت و پیوست شد.</i>`;
+        const relativePath = path.relative(process.cwd(), this.screenshotPath) || this.screenshotPath;
+        message += `\n📸 <b>مسیر اسکرین‌شات:</b> <code>${escapeHtml(relativePath)}</code>`;
       }
     }
 

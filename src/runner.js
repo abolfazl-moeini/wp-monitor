@@ -11,7 +11,7 @@ function sanitizeForFileName(str) {
 }
 
 async function captureFailureScreenshot(page, reporter, config, scenarioId) {
-  if (!page) return;
+  if (!page || page.isClosed()) return;
 
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -77,7 +77,7 @@ export async function runMonitoringEngine(customOptions = {}) {
     context = await browser.newContext({
       viewport: { width: 1366, height: 768 },
       userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (WooCommerce E2E Monitor Core)',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       extraHTTPHeaders: extraHeaders,
       locale: 'fa-IR',
       timezoneId: 'Asia/Tehran',
@@ -134,6 +134,12 @@ export async function runMonitoringEngine(customOptions = {}) {
     }
   } catch (fatalErr) {
     console.error(`💥 خطای غیرمنتظره در موتور مانیتورینگ: ${fatalErr.message}`);
+
+    // If page is open when fatal error occurs, capture screenshot
+    if (page && !page.isClosed()) {
+      await captureFailureScreenshot(page, reporter, config, 'fatal_error');
+    }
+
     reporter.addResult({
       name: 'راه‌اندازی مانیتورینگ',
       ok: false,
