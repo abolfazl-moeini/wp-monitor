@@ -4,6 +4,10 @@
 export const Selectors = {
   login: {
     username: [
+      'form.woocommerce-form-login input[autocomplete="username"]',
+      'form.login input[autocomplete="username"]',
+      'form.woocommerce-form-login input[name="username"]',
+      'form.login input[name="username"]',
       'input#username',
       'input[name="username"]',
       'input[autocomplete="username"]',
@@ -11,7 +15,8 @@ export const Selectors = {
       'input[name="log"]',
       'form.woocommerce-form-login input[type="text"]',
       'form.login input[type="text"]',
-      'input[type="email"]',
+      'form.woocommerce-form-login input[type="email"]',
+      'form.login input[type="email"]',
     ].join(', '),
 
     password: [
@@ -29,7 +34,6 @@ export const Selectors = {
       'form.woocommerce-form-login button[type="submit"]',
       'form.login button[type="submit"]',
       'form.woocommerce-form-login input[type="submit"]',
-      'button:has-text("ورود")',
       'button:has-text("Log in")',
       'button:has-text("Sign in")',
     ].join(', '),
@@ -40,7 +44,6 @@ export const Selectors = {
       'a[href*="customer-logout"]',
       'a[href*="action=logout"]',
       '.woocommerce-MyAccount-navigation-link--customer-logout',
-      'a:has-text("خروج")',
       'a:has-text("Log out")',
     ].join(', '),
   },
@@ -53,19 +56,22 @@ export const Selectors = {
       '.wc-block-cart-items__row',
     ].join(', '),
 
-    singleAddToCartButton: (productId) => [
+    singleAddToCartButton: (productId) => {
+      const safeProductId = String(productId || '').replace(/[^0-9]/g, '');
+      return [
+      safeProductId ? `form.cart button[name="add-to-cart"][value="${safeProductId}"]` : null,
+      safeProductId ? `form.cart input[name="add-to-cart"][value="${safeProductId}"]` : null,
+      safeProductId ? `a[data-product_id="${safeProductId}"]` : null,
       'button.single_add_to_cart_button',
       'button[name="add-to-cart"]',
       'form.cart button[type="submit"]',
-      productId ? `a[data-product_id="${productId}"]` : null,
-      'button:has-text("افزودن به سبد خرید")',
       'button:has-text("Add to cart")',
-    ].filter(Boolean).join(', '),
+      ].filter(Boolean).join(', ');
+    },
 
     emptyNotice: [
       '.cart-empty',
       '.wc-empty-cart-message',
-      ':text("سبد خرید شما در حال حاضر خالی است")',
       ':text("Your cart is currently empty")',
     ].join(', '),
 
@@ -106,8 +112,6 @@ export const Selectors = {
     paymentFallback: 'input[name="payment_method"], ul.wc_payment_methods li, .wc-block-checkout__payment-method, .wc-block-components-radio-control__option',
 
     noGatewaysNotice: [
-      ':text("هیچ روش پرداختی وجود ندارد")',
-      ':text("روشی برای پرداخت در دسترس نیست")',
       ':text("No payment methods are available")',
       ':text("There are no payment methods available")',
     ].join(', '),

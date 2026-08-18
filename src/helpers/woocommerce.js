@@ -1,5 +1,25 @@
 import { Selectors } from './selectors.js';
 
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function countVisible(locator) {
+  let visibleCount = 0;
+  const count = await locator.count();
+  for (let index = 0; index < count; index += 1) {
+    if (await locator.nth(index).isVisible()) visibleCount += 1;
+  }
+  return visibleCount;
+}
+
+async function waitForVisible(locator, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await countVisible(locator) > 0) return true;
+    await delay(Math.min(100, Math.max(1, deadline - Date.now())));
+  }
+  return countVisible(locator) > 0;
+}
+
 /**
  * Standard Customer Login helper
  * @param {import('playwright').Page} page
@@ -123,9 +143,12 @@ export async function addProductToCart(page, ctx, options = {}) {
 
     const emptyNotice = page.locator(Selectors.cart.emptyNotice).first();
     const isCartEmpty = (await emptyNotice.count() > 0) && (await emptyNotice.isVisible());
+    const cartItem = page.locator(Selectors.cart.item).first();
+    const hasVisibleCartItem = !isCartEmpty
+      && await waitForVisible(page.locator(Selectors.cart.item), Math.min(config.timeoutMs, 3000));
 
     // Fallback: If cart is empty after direct URL, try visiting single product page
-    if (isCartEmpty) {
+    if (isCartEmpty || !hasVisibleCartItem) {
       console.log(`   ↳ Direct URL did not populate cart; trying single product page (?p=${productId})...`);
       const productPageUrl = `${config.siteUrl}/?p=${productId}`;
       await page.goto(productPageUrl, {
@@ -146,14 +169,14 @@ export async function addProductToCart(page, ctx, options = {}) {
         timeout: config.timeoutMs,
       });
 
-      if (await emptyNotice.count() > 0 && await emptyNotice.isVisible()) {
+      if ((await emptyNotice.count() > 0 && await emptyNotice.isVisible())
+        || (await countVisible(page.locator(Selectors.cart.item)) === 0)) {
         throw new Error('Cart remains empty after trying both direct URL and product page button clicks.');
       }
     }
 
     // A visible cart wrapper alone is not enough: empty carts often render
     // the same wrapper. Require at least one visible cart item.
-    const cartItem = page.locator(Selectors.cart.item).first();
     await cartItem.waitFor({ state: 'visible', timeout: config.timeoutMs });
 
     return {
@@ -210,52 +233,35 @@ export async function verifyCheckoutAndGateways(page, ctx, options = {}) {
     const paymentSection = page.locator(Selectors.checkout.paymentSection).first();
     await paymentSection.waitFor({ state: 'visible', timeout: config.timeoutMs });
 
-    // Wait for payment methods to settle (handling AJAX delay in classic and block themes)
-    const paymentMethodsLocator = page.locator([
-      'ul.wc_payment_methods > li.wc_payment_method',
-      'ul.payment_methods > li',
-      '.wc-block-checkout__payment-method',
-      '.wc-block-components-radio-control__option',
-      '#payment .payment_methods li',
-    ].join(', '));
-
-    try {
-      await paymentMethodsLocator.first().waitFor({ state: 'attached', timeout: Math.min(config.timeoutMs, 10000) });
-    } catch {}
-
-    // Locate payment methods. Count only visible methods; hidden template
-    // nodes must not make a broken checkout look healthy.
+    const noGatewayNotice = page.locator(Selectors.checkout.noGatewaysNotice).first();
+    const gatewayDeadline = Date.now() + config.timeoutMs;
     let gatewayCount = 0;
-    for (const sel of Selectors.checkout.paymentCandidateSelectors) {
-      const loc = page.locator(sel);
-      try {
-        const count = await loc.count();
-        for (let i = 0; i < count; i += 1) {
-          if (await loc.nth(i).isVisible()) gatewayCount += 1;
-        }
-        if (gatewayCount > 0) {
+
+    // Poll for visible methods instead of waiting only for an attached node;
+    // classic WooCommerce may render hidden templates before AJAX reveals the
+    // actual methods.
+    while (Date.now() < gatewayDeadline) {
+      if (await noGatewayNotice.count() > 0 && await noGatewayNotice.isVisible()) {
+        throw new Error('No payment methods available notice displayed on checkout page.');
+      }
+
+      for (const selector of Selectors.checkout.paymentCandidateSelectors) {
+        const visibleCount = await countVisible(page.locator(selector));
+        if (visibleCount > 0) {
+          gatewayCount = visibleCount;
           break;
         }
-      } catch {}
-    }
-
-    if (gatewayCount === 0) {
-      const fallbackLoc = page.locator(Selectors.checkout.paymentFallback).first();
-      await fallbackLoc.waitFor({ state: 'attached', timeout: config.timeoutMs });
-      const fallbackCount = await page.locator(Selectors.checkout.paymentFallback).count();
-      for (let i = 0; i < fallbackCount; i += 1) {
-        if (await page.locator(Selectors.checkout.paymentFallback).nth(i).isVisible()) gatewayCount += 1;
       }
+
+      if (gatewayCount > 0) break;
+      await delay(Math.min(100, Math.max(1, gatewayDeadline - Date.now())));
     }
 
     if (gatewayCount === 0) {
+      if (await noGatewayNotice.count() > 0 && await noGatewayNotice.isVisible()) {
+        throw new Error('No payment methods available notice displayed on checkout page.');
+      }
       throw new Error('No payment gateways or methods found on checkout page.');
-    }
-
-    // Check no-gateways notice
-    const noGatewayNotice = page.locator(Selectors.checkout.noGatewaysNotice).first();
-    if (await noGatewayNotice.count() > 0 && await noGatewayNotice.isVisible()) {
-      throw new Error('No payment methods available notice displayed on checkout page.');
     }
 
     return {

@@ -7,7 +7,8 @@ import { Reporter } from './reporter.js';
 import { Notifier } from './notifier.js';
 
 function sanitizeForFileName(str) {
-  return String(str).replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_').toLowerCase();
+  const sanitized = String(str).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  return sanitized.replace(/^_+|_+$/g, '') || 'scenario';
 }
 
 async function captureFailureScreenshot(page, reporter, config, scenarioId) {

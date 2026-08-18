@@ -2,11 +2,11 @@ FROM mcr.microsoft.com/playwright:v1.62.1-noble
 
 WORKDIR /app
 
-# Copy package manifest
-COPY package.json ./
+# Copy package manifests
+COPY package.json package-lock.json ./
 
 # Install npm dependencies
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copy core engine source code
 COPY bin/ ./bin/
