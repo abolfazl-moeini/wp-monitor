@@ -1,8 +1,8 @@
-FROM mcr.microsoft.com/playwright:v1.49.1-noble
+FROM mcr.microsoft.com/playwright:v1.62.1-noble
 
 WORKDIR /app
 
-# Copy package manifests
+# Copy package manifest
 COPY package.json ./
 
 # Install npm dependencies
