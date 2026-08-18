@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { pathToFileURL } from 'url';
+import { resolveEnvironment } from './prompt.js';
 
 // Load .env from process.cwd() (the site repository root)
 const envPath = path.resolve(process.cwd(), '.env');
@@ -75,10 +76,11 @@ export const config = {
  */
 export async function loadSiteConfig() {
   const configFile = path.resolve(process.cwd(), 'monitor.config.js');
+  let siteConfig = {};
   if (fs.existsSync(configFile)) {
     try {
       const module = await import(pathToFileURL(configFile).href);
-      const siteConfig = module.default || module;
+      siteConfig = module.default || module;
       if (typeof siteConfig === 'object' && siteConfig !== null) {
         if (siteConfig.siteName) config.siteName = siteConfig.siteName;
         if (siteConfig.scenarios) config.scenarios = siteConfig.scenarios;
@@ -86,11 +88,22 @@ export async function loadSiteConfig() {
         if (siteConfig.accountPath && !process.env.ACCOUNT_PATH) config.accountPath = normalizePath(siteConfig.accountPath, '/my-account/');
         if (siteConfig.cartPath && !process.env.CART_PATH) config.cartPath = normalizePath(siteConfig.cartPath, '/cart/');
         if (siteConfig.checkoutPath && !process.env.CHECKOUT_PATH) config.checkoutPath = normalizePath(siteConfig.checkoutPath, '/checkout/');
+        if (siteConfig.environments) config.environments = siteConfig.environments;
+        if (siteConfig.defaultEnvironment) config.defaultEnvironment = siteConfig.defaultEnvironment;
       }
     } catch (err) {
       throw new Error(`Syntax or loading error in monitor.config.js: ${err.message}`);
     }
   }
+
+  // Resolve target environment (Production / Staging / CLI / Interactive prompt)
+  if (!config.siteUrl || !process.env.SITE_URL) {
+    const envChoice = await resolveEnvironment(siteConfig);
+    config.siteUrl = envChoice.url;
+    config.targetEnv = envChoice.envKey;
+    config.targetEnvName = envChoice.name;
+  }
+
   config.siteUrl = normalizeUrl(config.siteUrl);
   config.artifactsDir = path.resolve(process.cwd(), config.artifactsDir || 'artifacts');
   config.scenariosDir = path.resolve(process.cwd(), config.scenariosDir || 'scenarios');
