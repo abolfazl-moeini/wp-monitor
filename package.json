@@ -1,0 +1,30 @@
+{
+  "name": "wp-monitor",
+  "version": "1.0.0",
+  "description": "Core engine for WordPress & WooCommerce E2E monitoring",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "wp-monitor": "bin/monitor.js"
+  },
+  "scripts": {
+    "start": "node bin/monitor.js"
+  },
+  "keywords": [
+    "wordpress",
+    "woocommerce",
+    "playwright",
+    "e2e",
+    "monitoring",
+    "telegram-bot"
+  ],
+  "author": "Abolfazl Moeini",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "playwright": "^1.49.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
