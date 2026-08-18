@@ -30,10 +30,12 @@ export const Selectors = {
     ].join(', '),
 
     submit: [
+      'button.login-form-btn',
       'button[name="login"]',
       'form.woocommerce-form-login button[type="submit"]',
       'form.login button[type="submit"]',
       'form.woocommerce-form-login input[type="submit"]',
+      'button:has-text("ورود")',
       'button:has-text("Log in")',
       'button:has-text("Sign in")',
     ].join(', '),
@@ -44,6 +46,7 @@ export const Selectors = {
       'a[href*="customer-logout"]',
       'a[href*="action=logout"]',
       '.woocommerce-MyAccount-navigation-link--customer-logout',
+      'a:has-text("خروج")',
       'a:has-text("Log out")',
     ].join(', '),
   },
@@ -62,9 +65,13 @@ export const Selectors = {
       safeProductId ? `form.cart button[name="add-to-cart"][value="${safeProductId}"]` : null,
       safeProductId ? `form.cart input[name="add-to-cart"][value="${safeProductId}"]` : null,
       safeProductId ? `a[data-product_id="${safeProductId}"]` : null,
+      'a.single_add_to_cart_button',
       'button.single_add_to_cart_button',
       'button[name="add-to-cart"]',
       'form.cart button[type="submit"]',
+      'a[href*="add-to-cart"]',
+      'button:has-text("افزودن به سبد")',
+      'button:has-text("ثبت‌نام در دوره")',
       'button:has-text("Add to cart")',
       ].filter(Boolean).join(', ');
     },
@@ -72,6 +79,7 @@ export const Selectors = {
     emptyNotice: [
       '.cart-empty',
       '.wc-empty-cart-message',
+      ':text("سبد خرید شما در حال حاضر خالی است")',
       ':text("Your cart is currently empty")',
     ].join(', '),
 
@@ -112,6 +120,9 @@ export const Selectors = {
     paymentFallback: 'input[name="payment_method"], ul.wc_payment_methods li, .wc-block-checkout__payment-method, .wc-block-components-radio-control__option',
 
     noGatewaysNotice: [
+      ':text("هیچ روش پرداختی وجود ندارد")',
+      ':text("روشی برای پرداخت در دسترس نیست")',
+      ':text("هیچ روش پرداختی برای موقعیت شما یافت نشد")',
       ':text("No payment methods are available")',
       ':text("There are no payment methods available")',
     ].join(', '),
