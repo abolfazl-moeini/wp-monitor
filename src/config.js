@@ -63,6 +63,7 @@ export const config = {
   timeoutMs: parseTimeout(process.env.TIMEOUT_MS),
   headless: parseBool(process.env.HEADLESS, true),
   quietOnSuccess: parseBool(process.env.QUIET_ON_SUCCESS, false),
+  continueOnFailure: parseBool(process.env.CONTINUE_ON_FAILURE, true),
 
   // Paths
   rootDir: process.cwd(),
@@ -90,6 +91,7 @@ export async function loadSiteConfig() {
         if (siteConfig.checkoutPath && !process.env.CHECKOUT_PATH) config.checkoutPath = normalizePath(siteConfig.checkoutPath, '/checkout/');
         if (siteConfig.environments) config.environments = siteConfig.environments;
         if (siteConfig.defaultEnvironment) config.defaultEnvironment = siteConfig.defaultEnvironment;
+        if (siteConfig.cookies) config.cookies = siteConfig.cookies;
       }
     } catch (err) {
       throw new Error(`Syntax or loading error in monitor.config.js: ${err.message}`);

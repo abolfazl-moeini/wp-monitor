@@ -84,6 +84,11 @@ export async function runMonitoringEngine(customOptions = {}) {
       timezoneId: 'UTC',
     });
 
+    if (config.cookies && Array.isArray(config.cookies) && config.cookies.length > 0) {
+      await context.addCookies(config.cookies);
+      console.log(`🍪 Injected ${config.cookies.length} cookie(s) into browser context.`);
+    }
+
     page = await context.newPage();
     page.setDefaultTimeout(config.timeoutMs);
     page.setDefaultNavigationTimeout(config.timeoutMs);
@@ -95,7 +100,7 @@ export async function runMonitoringEngine(customOptions = {}) {
     for (let i = 0; i < scenarios.length; i++) {
       const sc = scenarios[i];
 
-      if (hasFailed) {
+      if (hasFailed && !config.continueOnFailure) {
         reporter.addResult({
           name: sc.name,
           ok: false,
