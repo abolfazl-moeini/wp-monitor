@@ -41,11 +41,25 @@ function parseTimeout(value, defaultValue = 30000) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
+function parseScenarioFilter() {
+  for (const arg of process.argv) {
+    if (arg.startsWith('--scenario=')) {
+      const eqIdx = arg.indexOf('=');
+      const val = eqIdx === -1 ? '' : arg.slice(eqIdx + 1);
+      return (val || '').trim();
+    }
+  }
+  return (process.env.SCENARIO_IDS || '').trim();
+}
+
 export const config = {
   siteUrl: normalizeUrl(process.env.SITE_URL || ''),
   testUser: (process.env.TEST_USER || '').trim(),
   testPass: process.env.TEST_PASS || '',
   testProductId: (process.env.TEST_PRODUCT_ID || '').trim(),
+
+  // Scoped scenario filter
+  scenarioFilter: parseScenarioFilter(),
 
   // Customizable paths (optional)
   accountPath: normalizePath(process.env.ACCOUNT_PATH, '/my-account/'),
@@ -53,8 +67,8 @@ export const config = {
   checkoutPath: normalizePath(process.env.CHECKOUT_PATH, '/checkout/'),
 
   // Telegram
-  tgToken: (process.env.TG_TOKEN || '').trim(),
-  tgChat: (process.env.TG_CHAT || '').trim(),
+  tgToken: (process.env.TG_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '').trim(),
+  tgChat: (process.env.TG_CHAT || process.env.TELEGRAM_CHAT_ID || '').trim(),
 
   // Security / WAF
   monitorKey: (process.env.MONITOR_KEY || '').trim(),
@@ -98,6 +112,12 @@ export async function loadSiteConfig() {
     }
   }
 
+  // CLI argument overrides
+  const cliScenario = parseScenarioFilter();
+  if (cliScenario) {
+    config.scenarioFilter = cliScenario;
+  }
+
   // Resolve target environment (Production / Staging / CLI / Interactive prompt)
   if (!config.siteUrl || !process.env.SITE_URL) {
     const envChoice = await resolveEnvironment(siteConfig);
@@ -117,7 +137,20 @@ export function validateConfig() {
   if (!config.siteUrl) missing.push('SITE_URL');
   if (!config.testUser) missing.push('TEST_USER');
   if (!config.testPass) missing.push('TEST_PASS');
-  if (!config.testProductId) missing.push('TEST_PRODUCT_ID');
+
+  // Scoped DRM scenario does not require generic TEST_PRODUCT_ID
+  // Use precise matching (exact or prefix) to avoid false positive on "123"
+  const filterTokens = String(config.scenarioFilter || '')
+    .toLowerCase()
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const isDrmScoped = filterTokens.some(
+    (filter) => filter === '23' || filter.startsWith('23-') || filter.startsWith('23.')
+  );
+  if (!config.testProductId && !isDrmScoped) {
+    missing.push('TEST_PRODUCT_ID');
+  }
 
   if (missing.length > 0) {
     throw new Error(
@@ -136,7 +169,7 @@ export function validateConfig() {
     throw new Error('SITE_URL is invalid; provide a valid URL like https://example.com');
   }
 
-  if (!/^\d+$/.test(String(config.testProductId))) {
+  if (config.testProductId && !/^\d+$/.test(String(config.testProductId))) {
     throw new Error('TEST_PRODUCT_ID must be a numeric WooCommerce product ID.');
   }
 
