@@ -30,6 +30,7 @@ export class Reporter {
       durationMs: Math.round(result.durationMs || 0),
       message: result.message || (status === 'passed' ? 'Completed successfully' : 'Execution failed'),
       reasonCode: result.reasonCode || null,
+      coverageId: result.coverageId || null,
       evidence: result.evidence || null,
       error: result.error || null,
     });
@@ -118,6 +119,12 @@ export class Reporter {
       const resultName = escapeHtml(r.name);
       if (r.skipped) {
         message += `  ⏭️ <i>${resultName}</i> (Skipped)\n`;
+      } else if (r.status === 'blocked') {
+        message += `  ⛔ <i>${resultName}</i> (Blocked)\n`;
+        if (!failedStep) failedStep = r;
+      } else if (r.status === 'inconclusive') {
+        message += `  ❓ <b>${resultName}</b> (<code>${stepSec}s</code>) — Inconclusive\n`;
+        if (!failedStep) failedStep = r;
       } else if (r.ok) {
         message += `  ✅ <b>${resultName}</b> (<code>${stepSec}s</code>)\n`;
       } else {

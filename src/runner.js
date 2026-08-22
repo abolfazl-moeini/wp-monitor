@@ -95,19 +95,32 @@ export async function runMonitoringEngine(customOptions = {}) {
 
     const ctx = { config, reporter, browser, context, page };
     let hasFailed = false;
+    let skipScenarioLoop = false;
 
-    // Optional Extension Lifecycle Hook: onRunStart
+    // Optional Extension Lifecycle Hook: onRunStart (after cookies/headers/page)
     const extension = customOptions.extension || null;
     if (extension && typeof extension.onRunStart === 'function') {
       try {
         await extension.onRunStart({ config, reporter, browser, context, page });
       } catch (extRunErr) {
-        console.warn(`⚠️ [Extension] onRunStart warning: ${extRunErr.message}`);
+        skipScenarioLoop = true;
+        reporter.addResult({
+          name: 'Extension onRunStart',
+          ok: false,
+          status: 'failed',
+          durationMs: 0,
+          message: `Extension onRunStart failed: ${extRunErr.message}`,
+          reasonCode: 'EXTENSION_HOOK_ERROR',
+          error: extRunErr,
+        });
       }
     }
 
     // 5. Execute Chain of Responsibility
     for (let i = 0; i < scenarios.length; i++) {
+      if (skipScenarioLoop) {
+        break;
+      }
       const sc = scenarios[i];
 
       if (hasFailed && !config.continueOnFailure) {
@@ -151,7 +164,17 @@ export async function runMonitoringEngine(customOptions = {}) {
             Object.assign(scenarioContext, extStart.contextAdditions);
           }
         } catch (extScErr) {
-          console.warn(`⚠️ [Extension] onScenarioStart warning: ${extScErr.message}`);
+          reporter.addResult({
+            name: sc.name,
+            ok: false,
+            status: 'inconclusive',
+            durationMs: 0,
+            message: `Extension onScenarioStart failed: ${extScErr.message}`,
+            reasonCode: 'EXTENSION_HOOK_ERROR',
+            error: extScErr,
+          });
+          hasFailed = true;
+          continue;
         }
       }
 
@@ -163,13 +186,13 @@ export async function runMonitoringEngine(customOptions = {}) {
           name: sc.name,
           ok: false,
           status: 'failed',
-          durationMs: 0,
+          durationMs: Date.now() - (scenarioContext.startTime || Date.now()),
           message: `Unhandled scenario error: ${scenarioErr.message}`,
           error: scenarioErr,
         };
       }
 
-      // Optional Extension Lifecycle Hook: onScenarioEnd
+      // Optional Extension Lifecycle Hook: onScenarioEnd (before ok normalization)
       if (extension && typeof extension.onScenarioEnd === 'function') {
         try {
           result = await extension.onScenarioEnd({
@@ -179,7 +202,15 @@ export async function runMonitoringEngine(customOptions = {}) {
             scenarioContext,
           });
         } catch (extEndErr) {
-          console.warn(`⚠️ [Extension] onScenarioEnd warning: ${extEndErr.message}`);
+          result = {
+            name: sc.name,
+            ok: false,
+            status: 'inconclusive',
+            durationMs: Date.now() - (scenarioContext.startTime || Date.now()),
+            message: `Extension onScenarioEnd failed: ${extEndErr.message}`,
+            reasonCode: 'EXTENSION_HOOK_ERROR',
+            error: extEndErr,
+          };
         }
       }
 
@@ -211,11 +242,19 @@ export async function runMonitoringEngine(customOptions = {}) {
     }
 
     // Optional Extension Lifecycle Hook: onRunEnd
-    if (extension && typeof extension.onRunEnd === 'function') {
+    if (extension && typeof extension.onRunEnd === 'function' && !skipScenarioLoop) {
       try {
         await extension.onRunEnd({ reporter });
       } catch (extRunEndErr) {
-        console.warn(`⚠️ [Extension] onRunEnd warning: ${extRunEndErr.message}`);
+        reporter.addResult({
+          name: 'Extension onRunEnd',
+          ok: false,
+          status: 'inconclusive',
+          durationMs: 0,
+          message: `Extension onRunEnd failed: ${extRunEndErr.message}`,
+          reasonCode: 'EXTENSION_HOOK_ERROR',
+          error: extRunEndErr,
+        });
       }
     }
   } catch (fatalErr) {
@@ -237,7 +276,11 @@ export async function runMonitoringEngine(customOptions = {}) {
   } finally {
     const extension = customOptions.extension || null;
     if (extension && typeof extension.dispose === 'function') {
-      await extension.dispose({ page, context, browser }).catch(() => {});
+      try {
+        await extension.dispose({ page, context, browser });
+      } catch (disposeErr) {
+        console.warn(`⚠️ [Extension] dispose warning: ${disposeErr.message}`);
+      }
     }
 
     if (page) await page.close().catch(() => {});
