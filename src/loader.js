@@ -18,6 +18,8 @@ export async function loadScenarios(config) {
       id: sc.id || `scenario_${idx + 1}`,
       name: sc.name || `Scenario ${idx + 1}`,
       run: typeof sc.run === 'function' ? sc.run : sc,
+      capability: sc.capability,
+      requiresAi: sc.requiresAi,
     }));
   } else {
     // 2. Discover scenario files from scenarios directory
@@ -50,6 +52,8 @@ export async function loadScenarios(config) {
               id: file.replace(/\.js$/, ''),
               name: name,
               run: runFn,
+              capability: mod.capability,
+              requiresAi: mod.requiresAi,
             });
           } catch (err) {
             throw new Error(`Failed to load scenario ${file}: ${err.message}`);

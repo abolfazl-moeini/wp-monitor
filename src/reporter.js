@@ -18,13 +18,17 @@ export class Reporter {
   }
 
   addResult(result) {
+    const validStatuses = new Set(['passed', 'failed', 'inconclusive', 'blocked']);
+    const status = validStatuses.has(result.status)
+      ? result.status
+      : (result.skipped ? 'blocked' : (result.ok === true ? 'passed' : 'failed'));
     this.results.push({
       name: result.name,
-      ok: Boolean(result.ok),
-      status: result.status || (result.skipped ? 'blocked' : (result.ok ? 'passed' : 'failed')),
+      ok: status === 'passed',
+      status,
       skipped: Boolean(result.skipped),
       durationMs: Math.round(result.durationMs || 0),
-      message: result.message || (result.ok ? 'Completed successfully' : 'Execution failed'),
+      message: result.message || (status === 'passed' ? 'Completed successfully' : 'Execution failed'),
       reasonCode: result.reasonCode || null,
       evidence: result.evidence || null,
       error: result.error || null,
@@ -40,7 +44,7 @@ export class Reporter {
   }
 
   get isSuccess() {
-    return this.results.length > 0 && this.results.every((r) => r.ok && !r.skipped);
+    return this.results.length > 0 && this.results.every((r) => r.status === 'passed' && !r.skipped);
   }
 
   get totalDurationMs() {
@@ -59,7 +63,13 @@ export class Reporter {
       const sec = (r.durationMs / 1000).toFixed(2);
       let icon = '✅';
       let statusText = 'PASSED';
-      if (r.skipped) {
+      if (r.status === 'blocked' || r.reasonCode === 'PRODUCTION_MUTATION_BLOCKED' || r.reasonCode === 'HOSTNAME_ENV_MISMATCH') {
+        icon = '⛔';
+        statusText = 'BLOCKED';
+      } else if (r.status === 'inconclusive') {
+        icon = '❓';
+        statusText = 'INCONCLUSIVE';
+      } else if (r.skipped) {
         icon = '⏭️';
         statusText = 'SKIPPED';
       } else if (!r.ok) {

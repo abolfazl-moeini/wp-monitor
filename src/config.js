@@ -54,6 +54,7 @@ function parseScenarioFilter() {
 
 export const config = {
   siteUrl: normalizeUrl(process.env.SITE_URL || ''),
+  targetEnv: (process.env.TARGET_ENV || '').trim().toLowerCase() || undefined,
   testUser: (process.env.TEST_USER || '').trim(),
   testPass: process.env.TEST_PASS || '',
   testProductId: (process.env.TEST_PRODUCT_ID || '').trim(),
@@ -118,8 +119,12 @@ export async function loadSiteConfig() {
     config.scenarioFilter = cliScenario;
   }
 
-  // Resolve target environment (Production / Staging / CLI / Interactive prompt)
-  if (!config.siteUrl || !process.env.SITE_URL) {
+  // Resolve target environment (Production / Staging / CLI / Interactive prompt).
+  // An explicit --env/--staging/--prod or TARGET_ENV must override a stale SITE_URL.
+  const hasEnvironmentSelection = process.argv.some(
+    (arg) => arg === '--staging' || arg === '--prod' || arg === '--production' || arg.startsWith('--env=')
+  ) || Boolean(process.env.TARGET_ENV);
+  if (!config.siteUrl || !process.env.SITE_URL || hasEnvironmentSelection) {
     const envChoice = await resolveEnvironment(siteConfig);
     config.siteUrl = envChoice.url;
     config.targetEnv = envChoice.envKey;

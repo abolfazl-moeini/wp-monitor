@@ -192,8 +192,12 @@ export async function runMonitoringEngine(customOptions = {}) {
           durationMs: 0,
           message: 'Scenario returned invalid non-object result',
         };
-      } else if (typeof result.ok !== 'boolean') {
+      } else if (['passed', 'failed', 'inconclusive', 'blocked'].includes(result.status)) {
+        // Keep the core contract authoritative when an extension returns conflicting fields.
         result.ok = result.status === 'passed';
+      } else if (typeof result.ok !== 'boolean') {
+        result.status = result.skipped ? 'blocked' : 'failed';
+        result.ok = false;
       }
 
       reporter.addResult(result);
