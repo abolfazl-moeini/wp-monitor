@@ -96,6 +96,16 @@ export async function runMonitoringEngine(customOptions = {}) {
     const ctx = { config, reporter, browser, context, page };
     let hasFailed = false;
 
+    // Optional Extension Lifecycle Hook: onRunStart
+    const extension = customOptions.extension || null;
+    if (extension && typeof extension.onRunStart === 'function') {
+      try {
+        await extension.onRunStart({ config, reporter, browser, context, page });
+      } catch (extRunErr) {
+        console.warn(`⚠️ [Extension] onRunStart warning: ${extRunErr.message}`);
+      }
+    }
+
     // 5. Execute Chain of Responsibility
     for (let i = 0; i < scenarios.length; i++) {
       const sc = scenarios[i];
@@ -104,6 +114,7 @@ export async function runMonitoringEngine(customOptions = {}) {
         reporter.addResult({
           name: sc.name,
           ok: false,
+          status: 'blocked',
           skipped: true,
           durationMs: 0,
           message: 'Skipped due to previous step failure.',
@@ -113,20 +124,76 @@ export async function runMonitoringEngine(customOptions = {}) {
 
       console.log(`\n⏳ Running scenario [${i + 1}/${scenarios.length}]: ${sc.name}...`);
 
+      const scenarioContext = { ...ctx, startTime: Date.now() };
+
+      // Optional Extension Lifecycle Hook: onScenarioStart
+      if (extension && typeof extension.onScenarioStart === 'function') {
+        try {
+          const extStart = await extension.onScenarioStart({
+            scenario: sc,
+            page,
+            context,
+            baseContext: ctx,
+          });
+
+          if (extStart?.skipExecution) {
+            reporter.addResult(extStart.blockedResult || {
+              name: sc.name,
+              ok: false,
+              status: 'blocked',
+              skipped: true,
+              message: 'Blocked by policy guard.',
+            });
+            continue;
+          }
+
+          if (extStart?.contextAdditions) {
+            Object.assign(scenarioContext, extStart.contextAdditions);
+          }
+        } catch (extScErr) {
+          console.warn(`⚠️ [Extension] onScenarioStart warning: ${extScErr.message}`);
+        }
+      }
+
       let result;
       try {
-        result = await sc.run(page, ctx);
-        if (!result || typeof result.ok !== 'boolean') {
-          throw new Error('Scenario must return an object with a boolean ok property.');
-        }
+        result = await sc.run(page, scenarioContext);
       } catch (scenarioErr) {
         result = {
           name: sc.name,
           ok: false,
+          status: 'failed',
           durationMs: 0,
           message: `Unhandled scenario error: ${scenarioErr.message}`,
           error: scenarioErr,
         };
+      }
+
+      // Optional Extension Lifecycle Hook: onScenarioEnd
+      if (extension && typeof extension.onScenarioEnd === 'function') {
+        try {
+          result = await extension.onScenarioEnd({
+            scenario: sc,
+            result,
+            page,
+            scenarioContext,
+          });
+        } catch (extEndErr) {
+          console.warn(`⚠️ [Extension] onScenarioEnd warning: ${extEndErr.message}`);
+        }
+      }
+
+      // Result validation & normalization
+      if (!result || typeof result !== 'object') {
+        result = {
+          name: sc.name,
+          ok: false,
+          status: 'failed',
+          durationMs: 0,
+          message: 'Scenario returned invalid non-object result',
+        };
+      } else if (typeof result.ok !== 'boolean') {
+        result.ok = result.status === 'passed';
       }
 
       reporter.addResult(result);
@@ -136,6 +203,15 @@ export async function runMonitoringEngine(customOptions = {}) {
         console.error(`❌ Scenario ${sc.name} failed: ${result.message}`);
 
         await captureFailureScreenshot(page, reporter, config, sc.id || `step_${i + 1}`);
+      }
+    }
+
+    // Optional Extension Lifecycle Hook: onRunEnd
+    if (extension && typeof extension.onRunEnd === 'function') {
+      try {
+        await extension.onRunEnd({ reporter });
+      } catch (extRunEndErr) {
+        console.warn(`⚠️ [Extension] onRunEnd warning: ${extRunEndErr.message}`);
       }
     }
   } catch (fatalErr) {
@@ -149,11 +225,17 @@ export async function runMonitoringEngine(customOptions = {}) {
     reporter.addResult({
       name: 'Engine Initialization',
       ok: false,
+      status: 'failed',
       durationMs: 0,
       message: fatalErr.message,
       error: fatalErr,
     });
   } finally {
+    const extension = customOptions.extension || null;
+    if (extension && typeof extension.dispose === 'function') {
+      await extension.dispose({ page, context, browser }).catch(() => {});
+    }
+
     if (page) await page.close().catch(() => {});
     if (context) await context.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});

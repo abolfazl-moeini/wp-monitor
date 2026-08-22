@@ -21,9 +21,12 @@ export class Reporter {
     this.results.push({
       name: result.name,
       ok: Boolean(result.ok),
+      status: result.status || (result.skipped ? 'blocked' : (result.ok ? 'passed' : 'failed')),
       skipped: Boolean(result.skipped),
       durationMs: Math.round(result.durationMs || 0),
       message: result.message || (result.ok ? 'Completed successfully' : 'Execution failed'),
+      reasonCode: result.reasonCode || null,
+      evidence: result.evidence || null,
       error: result.error || null,
     });
   }
