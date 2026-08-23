@@ -181,6 +181,12 @@ export async function runMonitoringEngine(customOptions = {}) {
       let result;
       try {
         result = await sc.run(page, scenarioContext);
+        // Persist shared context state (e.g. createdTestUser, discoveredProductUrl) across scenario chain
+        for (const [key, value] of Object.entries(scenarioContext)) {
+          if (!['startTime', 'config', 'reporter', 'browser', 'context', 'page'].includes(key)) {
+            ctx[key] = value;
+          }
+        }
       } catch (scenarioErr) {
         result = {
           name: sc.name,
