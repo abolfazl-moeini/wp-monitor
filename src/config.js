@@ -7,9 +7,9 @@ import { resolveEnvironment } from './prompt.js';
 // Load .env from process.cwd() (the site repository root)
 const envPath = path.resolve(process.cwd(), '.env');
 if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
+  dotenv.config({ path: envPath, override: true });
 } else {
-  dotenv.config();
+  dotenv.config({ override: true });
 }
 
 function parseBool(val, defaultValue) {
