@@ -111,12 +111,12 @@ export async function addProductToCart(page, ctx, options = {}) {
   const { config } = ctx;
   const productId = options.productId || config.testProductId;
   const cartUrl = options.cartUrl || `${config.siteUrl}${config.cartPath || '/cart/'}`;
-  const targetProductPage = options.productUrl || config.testProductUrl || ctx?.discoveredProductUrl || (productId ? `${config.siteUrl}/?p=${productId}` : null);
+  const targetProductPage = options.productUrl || config.testProductUrl || ctx?.discoveredProductUrl || `${config.siteUrl}/product/basic-python-training/`;
 
   try {
     console.log(`🔹 Adding test product to cart...`);
 
-    const addUrl = options.url || (productId ? `${config.siteUrl}/?add-to-cart=${productId}` : targetProductPage);
+    const addUrl = options.url || targetProductPage;
     if (addUrl) {
       await page.goto(addUrl, {
         waitUntil: 'domcontentloaded',
@@ -139,10 +139,14 @@ export async function addProductToCart(page, ctx, options = {}) {
     }
 
     // Verify cart page
-    await page.goto(cartUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: config.timeoutMs,
-    });
+    if (!page.url().includes('/cart')) {
+      await page.goto(cartUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: config.timeoutMs,
+      }).catch((e) => {
+        if (!e.message.includes('ERR_ABORTED')) throw e;
+      });
+    }
 
     const emptyNotice = page.locator(Selectors.cart.emptyNotice).first();
     const isCartEmpty = (await emptyNotice.count() > 0) && (await emptyNotice.isVisible());
@@ -150,41 +154,46 @@ export async function addProductToCart(page, ctx, options = {}) {
     const hasVisibleCartItem = !isCartEmpty
       && await waitForVisible(page.locator(Selectors.cart.item), Math.min(config.timeoutMs, 3000));
 
-    // Fallback: If cart is empty after direct URL, try visiting single product page
+    // Fallback: If cart is empty after direct URL, try visiting active course pages
     if (isCartEmpty || !hasVisibleCartItem) {
-      if (!targetProductPage) {
-        throw new Error('No target product URL available for add-to-cart fallback.');
-      }
-      console.log(`   ↳ Direct URL did not populate cart; trying single product page (${targetProductPage})...`);
-      await page.goto(targetProductPage, {
-        waitUntil: 'domcontentloaded',
-        timeout: config.timeoutMs,
-      });
+      const candidateUrls = [
+        targetProductPage,
+        `${config.siteUrl}/product/basic-python-training/`,
+        `${config.siteUrl}/product/making-a-persian-chatbot/`,
+        `${config.siteUrl}/product/data-science-in-business/`,
+      ].filter(Boolean);
 
-      const fallbackButton = page.locator([
-        Selectors.cart.singleAddToCartButton(productId),
-        'button.single_add_to_cart_button',
-        'a.single_add_to_cart_button',
-        'form.cart button[type="submit"]',
-        'a[href*="add-to-cart"]',
-      ].join(', ')).first();
-      if (await fallbackButton.count() > 0 && await fallbackButton.isVisible()) {
-        await fallbackButton.click();
-        await page.waitForLoadState('domcontentloaded').catch(() => {});
-      } else {
-        console.log(`   ↳ Single product button not found; navigating to catalog to add live item...`);
-        await page.goto(`${config.siteUrl}/shop/`, { waitUntil: 'domcontentloaded', timeout: config.timeoutMs }).catch(() => {});
-        const loopBtn = page.locator('a.add_to_cart_button, a[href*="add-to-cart"], a.ajax_add_to_cart').first();
-        if (await loopBtn.count() > 0) {
-          await loopBtn.click().catch(() => {});
+      for (const prodUrl of candidateUrls) {
+        console.log(`   ↳ Trying candidate product page: ${prodUrl}...`);
+        await page.goto(prodUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: config.timeoutMs,
+        }).catch(() => {});
+
+        const singleBtn = page.locator('a.single_add_to_cart_button, a[href*="add-to-cart"], button.single_add_to_cart_button, form.cart button').first();
+        if (await singleBtn.count() > 0 && await singleBtn.isVisible()) {
+          const btnHref = await singleBtn.getAttribute('href').catch(() => null);
+          if (btnHref && btnHref.includes('add-to-cart=')) {
+            const fullBtnUrl = btnHref.startsWith('http') ? btnHref : `${config.siteUrl}${btnHref}`;
+            await page.goto(fullBtnUrl, { waitUntil: 'domcontentloaded', timeout: config.timeoutMs }).catch(() => {});
+          } else {
+            await singleBtn.click().catch(() => {});
+          }
           await page.waitForTimeout(1500);
+
+          if (!page.url().includes('/cart')) {
+            await page.goto(cartUrl, {
+              waitUntil: 'domcontentloaded',
+              timeout: config.timeoutMs,
+            }).catch(() => {});
+          }
+
+          const hasItem = (await page.locator(Selectors.cart.item).count()) > 0;
+          if (hasItem) {
+            break;
+          }
         }
       }
-
-      await page.goto(cartUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: config.timeoutMs,
-      });
 
       if ((await emptyNotice.count() > 0 && await emptyNotice.isVisible())
         || (await countVisible(page.locator(Selectors.cart.item)) === 0)) {
